@@ -1,0 +1,77 @@
+package com.personalizedfriendsounds;
+
+import lombok.extern.slf4j.Slf4j;
+
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.FloatControl;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.UnsupportedAudioFileException;
+import java.io.BufferedInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+@Singleton
+@Slf4j
+public class PersonalizedFriendSoundEngine
+{
+	@Inject
+	private PersonalizedFriendSoundsConfig config;
+
+	private Clip clip;
+
+	private boolean loadClip(String soundFile)
+	{
+		try (InputStream stream = new BufferedInputStream(PersonalizedFriendSoundFileManager.getSoundStream(soundFile));
+		     AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(stream))
+		{
+			clip.open(audioInputStream);
+			return true;
+		}
+		catch (UnsupportedAudioFileException | IOException | LineUnavailableException e)
+		{
+			log.warn("Failed to load sound file {}", soundFile, e);
+			return false;
+		}
+	}
+
+	public void playClip(String soundFile)
+	{
+		if (clip != null && clip.isOpen())
+		{
+			clip.close();
+		}
+
+		try
+		{
+			clip = AudioSystem.getClip();
+		}
+		catch (LineUnavailableException e)
+		{
+			log.warn("Failed to get clip for sound file {}", soundFile, e);
+			return;
+		}
+
+		if (!loadClip(soundFile))
+		{
+			return;
+		}
+
+		if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN))
+		{
+			FloatControl volume = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+			float configuredVolume = Math.max(0.0001f, config.pluginVolume() / 100f);
+			float gain = 20f * (float) Math.log10(configuredVolume);
+			gain = Math.min(gain, volume.getMaximum());
+			gain = Math.max(gain, volume.getMinimum());
+			volume.setValue(gain);
+		}
+
+		clip.stop();
+		clip.setFramePosition(0);
+		clip.start();
+	}
+}

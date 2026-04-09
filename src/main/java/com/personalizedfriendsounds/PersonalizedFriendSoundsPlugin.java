@@ -24,7 +24,7 @@ import java.util.Set;
 @Slf4j
 @PluginDescriptor(
 		name = "Personalized Friend Sounds",
-		description = "Play custom sounds for specific nearby players"
+		description = "Play custom sounds and overhead text for nearby friends"
 )
 public class PersonalizedFriendSoundsPlugin extends Plugin
 {
@@ -39,6 +39,20 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 
 	private final Set<String> seenPlayers = new HashSet<>();
 	private int tickTimer = 5;
+
+	@Override
+	protected void startUp()
+	{
+		log.info("Personalized Friend Sounds started");
+		log.info("Custom sound directory: {}", PersonalizedFriendSoundFileManager.getUserSoundDirectory().getAbsolutePath());
+	}
+
+	@Override
+	protected void shutDown()
+	{
+		seenPlayers.clear();
+		log.info("Personalized Friend Sounds stopped");
+	}
 
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event)
@@ -57,7 +71,6 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 		if (event.getType() == ChatMessageType.LOGINLOGOUTNOTIFICATION)
 		{
 			String message = event.getMessage();
-
 			if (message.contains(" has logged out."))
 			{
 				String name = normalizeName(message.replace(" has logged out.", ""));
@@ -75,14 +88,19 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 			return;
 		}
 
-		if (!(config.friendsList() || config.clanMembers()))
+		Map<String, PersonalizedFriendMapping> mappings = getMappings();
+		if (mappings.isEmpty())
 		{
 			tickTimer = 5;
 			return;
 		}
 
-		Map<String, String> mappings = getMappings();
 		List<Player> players = client.getPlayers();
+		if (players == null)
+		{
+			tickTimer = 5;
+			return;
+		}
 
 		for (Player player : players)
 		{
@@ -91,11 +109,8 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 				continue;
 			}
 
-			boolean validPlayer =
-					(player.isFriend() && config.friendsList())
-							|| (player.isClanMember() && config.clanMembers());
-
-			if (!validPlayer)
+			// 🔥 FRIENDS ONLY
+			if (!player.isFriend())
 			{
 				continue;
 			}
@@ -107,8 +122,8 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 				continue;
 			}
 
-			String soundFile = mappings.get(normalizedName);
-			if (soundFile == null || soundFile.isBlank())
+			PersonalizedFriendMapping mapping = mappings.get(normalizedName);
+			if (mapping == null)
 			{
 				continue;
 			}
@@ -117,19 +132,18 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 
 			try
 			{
-				soundEngine.playClip(soundFile);
+				soundEngine.playClip(mapping.getSoundFile());
 			}
 			catch (Exception ex)
 			{
-				log.warn("Failed to play sound {} for player {}", soundFile, player.getName(), ex);
+				log.warn("Failed to play sound {} for player {}", mapping.getSoundFile(), player.getName(), ex);
 			}
 
-			String overhead = config.overheadText();
+			// 🔥 per-user overhead text (fallback to global)
+			String overhead = mapping.getOverheadText();
+
 			if (overhead != null && !overhead.isBlank())
 			{
-				client.getLocalPlayer().setOverheadText(overhead);
-				client.getLocalPlayer().setOverheadCycle(200);
-
 				player.setOverheadText(overhead);
 				player.setOverheadCycle(200);
 			}
@@ -138,9 +152,9 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 		tickTimer = 5;
 	}
 
-	private Map<String, String> getMappings()
+	private Map<String, PersonalizedFriendMapping> getMappings()
 	{
-		Map<String, String> mappings = new HashMap<>();
+		Map<String, PersonalizedFriendMapping> mappings = new HashMap<>();
 		String raw = config.userSoundMappings();
 
 		if (raw == null || raw.isBlank())
@@ -151,7 +165,6 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 		for (String line : raw.split("\\r?\\n"))
 		{
 			String trimmed = line.trim();
-
 			if (trimmed.isEmpty() || !trimmed.contains("="))
 			{
 				continue;
@@ -159,11 +172,25 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 
 			String[] parts = trimmed.split("=", 2);
 			String username = normalizeName(parts[0]);
-			String soundFile = parts[1].trim();
+			String value = parts[1].trim();
+
+			String soundFile;
+			String overheadText = null;
+
+			if (value.contains("|"))
+			{
+				String[] split = value.split("\\|", 2);
+				soundFile = split[0].trim();
+				overheadText = split[1].trim();
+			}
+			else
+			{
+				soundFile = value;
+			}
 
 			if (!username.isEmpty() && !soundFile.isEmpty())
 			{
-				mappings.put(username, soundFile);
+				mappings.put(username, new PersonalizedFriendMapping(soundFile, overheadText));
 			}
 		}
 

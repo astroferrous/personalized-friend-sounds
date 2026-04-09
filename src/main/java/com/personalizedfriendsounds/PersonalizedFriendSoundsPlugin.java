@@ -109,7 +109,6 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 				continue;
 			}
 
-			// 🔥 FRIENDS ONLY
 			if (!player.isFriend())
 			{
 				continue;
@@ -139,7 +138,6 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 				log.warn("Failed to play sound {} for player {}", mapping.getSoundFile(), player.getName(), ex);
 			}
 
-			// 🔥 per-user overhead text (fallback to global)
 			String overhead = mapping.getOverheadText();
 
 			if (overhead != null && !overhead.isBlank())

@@ -14,7 +14,7 @@ public final class PersonalizedFriendSoundFileManager
 
 	private PersonalizedFriendSoundFileManager()
 	{
-		// Utility class
+
 	}
 
 	public static InputStream getSoundStream(String soundFile) throws FileNotFoundException

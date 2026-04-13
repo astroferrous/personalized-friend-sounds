@@ -1,53 +1,98 @@
 package com.personalizedfriendsounds;
 
-import lombok.extern.slf4j.Slf4j;
-
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import lombok.Getter;
+import net.runelite.client.RuneLite;
 
-@Slf4j
 public final class PersonalizedFriendSoundFileManager
 {
-	private static final String RESOURCE_PREFIX = "/sounds/";
+    private static final String PLUGIN_DIR_NAME = "personalized-friend-sounds";
+    private static final Path SOUND_DIR = RuneLite.RUNELITE_DIR.toPath().resolve(PLUGIN_DIR_NAME);
 
-	private PersonalizedFriendSoundFileManager()
-	{
+    private PersonalizedFriendSoundFileManager()
+    {
 
-	}
+    }
 
-	public static InputStream getSoundStream(String soundFile) throws FileNotFoundException
-	{
-		File externalFile = new File(getUserSoundDirectory(), soundFile);
-		if (externalFile.exists() && externalFile.isFile())
-		{
-			log.debug("Loading external sound file: {}", externalFile.getAbsolutePath());
-			return new FileInputStream(externalFile);
-		}
+    public static SoundHandle resolveSound(String soundFile)
+    {
+        if (soundFile == null)
+        {
+            return null;
+        }
 
-		String resourcePath = RESOURCE_PREFIX + soundFile;
-		InputStream stream = PersonalizedFriendSoundFileManager.class.getResourceAsStream(resourcePath);
-		if (stream != null)
-		{
-			log.debug("Loading bundled sound resource: {}", resourcePath);
-			return stream;
-		}
+        String trimmed = soundFile.trim();
+        if (trimmed.isEmpty())
+        {
+            return null;
+        }
 
-		throw new FileNotFoundException(
-				"Could not find sound '" + soundFile + "' in "
-						+ getUserSoundDirectory().getAbsolutePath()
-						+ " or bundled resources at " + resourcePath
-		);
-	}
+        ensureSoundDirectoryExists();
 
-	public static File getUserSoundDirectory()
-	{
-		File dir = new File(System.getProperty("user.home"), ".runelite/personalized-friend-sounds");
-		if (!dir.exists() && !dir.mkdirs())
-		{
-			log.warn("Failed to create sound directory: {}", dir.getAbsolutePath());
-		}
-		return dir;
-	}
+        File externalFile = SOUND_DIR.resolve(trimmed).toFile();
+        if (externalFile.exists() && externalFile.isFile())
+        {
+            return SoundHandle.forExternalFile(externalFile);
+        }
+
+        if (resourceExists(trimmed))
+        {
+            return SoundHandle.forBundledResource(trimmed);
+        }
+
+        return null;
+    }
+
+    public static Path getSoundDirectory()
+    {
+        ensureSoundDirectoryExists();
+        return SOUND_DIR;
+    }
+
+    private static void ensureSoundDirectoryExists()
+    {
+        try
+        {
+            Files.createDirectories(SOUND_DIR);
+        }
+        catch (Exception ignored)
+        {
+
+        }
+    }
+
+    private static boolean resourceExists(String resourceName)
+    {
+        return PersonalizedFriendSoundFileManager.class.getResourceAsStream(resourceName) != null;
+    }
+
+    @Getter
+    public static class SoundHandle
+    {
+        private final File file;
+        private final String resourcePath;
+
+        private SoundHandle(File file, String resourcePath)
+        {
+            this.file = file;
+            this.resourcePath = resourcePath;
+        }
+
+        public static SoundHandle forExternalFile(File file)
+        {
+            return new SoundHandle(file, null);
+        }
+
+        public static SoundHandle forBundledResource(String resourcePath)
+        {
+            return new SoundHandle(null, resourcePath);
+        }
+
+        public boolean isExternalFile()
+        {
+            return file != null;
+        }
+    }
 }

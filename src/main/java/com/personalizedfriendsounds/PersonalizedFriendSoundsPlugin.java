@@ -44,7 +44,8 @@ public class PersonalizedFriendSoundsPlugin extends Plugin
 	protected void startUp()
 	{
 		log.info("Personalized Friend Sounds started");
-		log.info("Custom sound directory: {}", PersonalizedFriendSoundFileManager.getUserSoundDirectory().getAbsolutePath());
+		log.info("Custom sound directory: {}",
+				PersonalizedFriendSoundFileManager.getSoundDirectory().toAbsolutePath());
 	}
 
 	@Override
